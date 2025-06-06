@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF 彩色頁面偵測</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #4c4e58 0%, #bcbeca 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #2d3748;
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .upload-area {
+      border: 3px dashed #4299e1;
+      border-radius: 15px;
+      padding: 3rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      background: linear-gradient(45deg, #f7fafc, #edf2f7);
+      margin-bottom: 2rem;
+    }
+
+    .upload-area:hover {
+      border-color: #3182ce;
+      background: linear-gradient(45deg, #edf2f7, #e2e8f0);
+      transform: translateY(-2px);
+    }
+
+    .upload-area.dragover {
+      border-color: #38a169;
+      background: linear-gradient(45deg, #f0fff4, #c6f6d5);
+    }
+
+    #pdf-upload {
+      display: none;
+    }
+
+    .upload-btn {
+      background: linear-gradient(135deg, #4299e1, #3182ce);
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 10px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+    }
+
+    .upload-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(66, 153, 225, 0.4);
+    }
+
+    .upload-text {
+      margin-top: 1rem;
+      color: #4a5568;
+      font-size: 1rem;
+    }
+
+    .status-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 15px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      border-left: 5px solid #4299e1;
+      transition: all 0.3s ease;
+    }
+
+    .status-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .status-card h3 {
+      color: #2d3748;
+      margin-bottom: 0.5rem;
+      font-size: 1.2rem;
+    }
+
+    .status-card p {
+      color: #4a5568;
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #4299e1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 0.5rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #preview {
+      margin-top: 2rem;
+    }
+
+    .preview-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .preview-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .preview-count {
+      background: linear-gradient(135deg, #48bb78, #38a169);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .thumb {
+      background: white;
+      border-radius: 15px;
+      padding: 1rem;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .thumb:hover {
+      transform: translateY(-8px) scale(1.05);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      z-index: 10;
+    }
+
+    .thumb canvas {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      margin-bottom: 0.8rem;
+      transition: all 0.3s ease;
+    }
+
+    .thumb:hover canvas {
+      transform: scale(1.1);
+    }
+
+    .page-number {
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 1rem;
+      padding: 0.5rem;
+      background: linear-gradient(135deg, #e2e8f0, #cbd5e0);
+      border-radius: 20px;
+      margin-top: 0.5rem;
+    }
+
+    .color-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 12px;
+      height: 12px;
+      background: linear-gradient(135deg, #48bb78, #38a169);
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.3);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* 響應式設計 */
+    @media (max-width: 768px) {
+      body {
+        padding: 1rem;
+      }
+      
+      .container {
+        padding: 1.5rem;
+      }
+      
+      h1 {
+        font-size: 2rem;
+      }
+      
+      .upload-area {
+        padding: 2rem;
+      }
+      
+      .status-cards {
+        grid-template-columns: 1fr;
+      }
+      
+      .preview-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
+      }
+    }
+
+    /* 放大預覽效果 */
+    .thumb:hover {
+      transform: translateY(-8px) scale(1.1);
+      z-index: 1000;
+    }
+
+    .thumb:hover .page-number {
+      background: linear-gradient(135deg, #4299e1, #3182ce);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 PDF 彩色頁面偵測器</h1>
+    
+    <div class="upload-area" id="upload-area">
+      <input type="file" id="pdf-upload" accept="application/pdf" />
+      <button class="upload-btn" onclick="document.getElementById('pdf-upload').click()">
+        📁 選擇 PDF 檔案
+      </button>
+      <div class="upload-text">或拖拽檔案到這裡</div>
+    </div>
+
+    <div class="status-cards">
+      <div class="status-card">
+        <h3>彩色頁面分析</h3>
+        <p id="result">請上傳 PDF 檔案開始分析</p>
+      </div>
+      <div class="status-card">
+        <h3>參考文獻偵測</h3>
+        <p id="ref-result">等待分析...</p>
+      </div>
+    </div>
+
+    <div id="preview" class="hidden">
+      <div class="preview-header">
+        <div class="preview-title">彩色頁面預覽</div>
+        <div class="preview-count" id="preview-count">0 頁</div>
+      </div>
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('pdf-upload');
+    const result = document.getElementById('result');
+    const refResult = document.getElementById('ref-result');
+    const preview = document.getElementById('preview');
+    const previewGrid = document.getElementById('preview-grid');
+    const previewCount = document.getElementById('preview-count');
+    const uploadArea = document.getElementById('upload-area');
+
+    // 拖拽功能
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].type === 'application/pdf') {
+        input.files = files;
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+
+    function isColorPixel(r, g, b) {
+      return !(r === g && g === b); // 判斷是否為灰階
+    }
+
+    async function isColorPage(page, previewCanvas = null) {
+      const viewport = page.getViewport({ scale: 1 });
+      const canvas = previewCanvas || document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let colorPixels = 0;
+      let totalPixels = imageData.length / 4;
+
+      for (let i = 0; i < imageData.length; i += 4) {
+        const r = imageData[i];
+        const g = imageData[i + 1];
+        const b = imageData[i + 2];
+
+        if (isColorPixel(r, g, b)) {
+          colorPixels++;
+          if (colorPixels / totalPixels > 0.005) return true; // 彩色門檻
+        }
+      }
+      return false;
+    }
+
+    async function detectReferenceStartPage(pdf) {
+      const keywords = ['參考文獻', 'references', 'bibliography', '引用文献'];
+      const totalPages = pdf.numPages;
+
+      for (let i = totalPages; i >= 1; i--) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str.toLowerCase()).join(' ');
+
+        if (keywords.some(kw => pageText.includes(kw))) {
+          return i;
+        }
+      }
+      return null;
+    }
+
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+
+      result.innerHTML = '<span class="loading"></span>正在分析彩色頁面...';
+      refResult.innerHTML = '<span class="loading"></span>正在偵測參考文獻...';
+      preview.classList.add('hidden');
+      previewGrid.innerHTML = '';
+
+      const fileReader = new FileReader();
+      fileReader.onload = async function () {
+        try {
+          const typedArray = new Uint8Array(this.result);
+          const pdf = await pdfjsLib.getDocument(typedArray).promise;
+          const totalPages = pdf.numPages;
+          const colorPages = [];
+
+          // 偵測參考文獻起始頁
+          const refPage = await detectReferenceStartPage(pdf);
+          if (refPage) {
+            refResult.innerHTML = `第 ${refPage} 頁開始為參考文獻`;
+          } else {
+            refResult.innerHTML = '未偵測到參考文獻頁面';
+          }
+
+          // 彩色頁面偵測
+          for (let i = 1; i <= totalPages; i++) {
+            const page = await pdf.getPage(i);
+            const canvas = document.createElement('canvas');
+
+            const isColor = await isColorPage(page, canvas);
+            if (isColor) {
+              colorPages.push(i);
+              
+              const thumb = document.createElement('div');
+              thumb.className = 'thumb';
+              thumb.innerHTML = `
+                <div class="color-indicator"></div>
+                <div class="page-number">第 ${i} 頁</div>
+              `;
+              thumb.insertBefore(canvas, thumb.firstChild);
+              previewGrid.appendChild(thumb);
+            }
+
+            // 更新進度
+            result.innerHTML = `<span class="loading"></span>正在分析... (${i}/${totalPages})`;
+          }
+
+          // 顯示最終結果
+          if (colorPages.length > 0) {
+            result.innerHTML = `發現 ${colorPages.length} 個彩色頁面：第 ${colorPages.join(', ')} 頁`;
+            previewCount.textContent = `${colorPages.length} 頁`;
+            preview.classList.remove('hidden');
+          } else {
+            result.innerHTML = '⚫ 所有頁面皆為黑白';
+          }
+
+        } catch (error) {
+          result.innerHTML = '❌ 檔案分析失敗，請確認是有效的PDF檔案';
+          refResult.innerHTML = '分析中斷';
+          console.error('PDF分析錯誤:', error);
+        }
+      };
+      fileReader.readAsArrayBuffer(file);
+    });
+  </script>
+</body>
+</html>

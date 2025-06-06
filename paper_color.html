@@ -346,7 +346,7 @@
 
         if (isColorPixel(r, g, b)) {
           colorPixels++;
-          if (colorPixels / totalPixels > 0.005) return true; // 彩色門檻
+          if (colorPixels / totalPixels > 0.0005) return true; // 彩色門檻
         }
       }
       return false;
